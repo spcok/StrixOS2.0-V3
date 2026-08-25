@@ -1,46 +1,50 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, type FieldApi } from '@tanstack/react-form';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import * as v from 'valibot';
-import { X, Save, Loader2, ThermometerSun } from 'lucide-react';
+import { X, Save, Loader2, ThermometerSun, Thermometer, Droplets } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
-import { temperatureService } from '../../services/temperatureService';
-import type { Animal } from '../../types';
+import type { Animal, TemperatureLog, User } from '../../types';
 
-interface ActiveStaffUser {
-  id: string;
-  name: string;
-  initials?: string | null;
+export interface TemperatureModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  animalId?: string | null;
+  animal?: Animal | null;
+  ambientOnly?: boolean;
+  initialData?: Partial<TemperatureLog> | null;
+  selectedDate?: string;
 }
 
 interface TemperatureFormValues {
   recorded_by: string;
   recorded_at: string;
-  temp_ambient?: number;
-  temp_basking?: number;
-  temp_cool?: number;
+  temp_ambient?: number | string | null;
+  temp_basking?: number | string | null;
+  temp_cool?: number | string | null;
+  humidity_percent?: number | string | null;
+  notes?: string;
 }
 
-export interface TemperatureModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  animalId: string;
-  ambientOnly: boolean;
-  initialData?: {
-    id?: string;
-    recorded_by?: string;
-    recorded_at?: string;
-    temp_ambient?: number | null;
-    temp_basking?: number | null;
-    temp_cool?: number | null;
-    temperature_c?: number | null;
-    basking_temp_c?: number | null;
-    cool_temp_c?: number | null;
-  } | null;
-  selectedDate?: string;
-}
+const TemperatureSchema = v.pipe(
+  v.object({
+    recorded_by: v.pipe(v.string(), v.minLength(1, 'ZLA COMPLIANCE: An active staff member must be selected.')),
+    recorded_at: v.pipe(v.string(), v.minLength(1, 'Date and time required')),
+    temp_ambient: v.optional(v.nullable(v.union([v.number(), v.string(), v.literal('')]))),
+    temp_basking: v.optional(v.nullable(v.union([v.number(), v.string(), v.literal('')]))),
+    temp_cool: v.optional(v.nullable(v.union([v.number(), v.string(), v.literal('')]))),
+    humidity_percent: v.optional(v.nullable(v.union([v.number(), v.string(), v.literal('')]))),
+    notes: v.optional(v.string()),
+  }),
+  v.check((data) => {
+    const hasAmb = data.temp_ambient !== '' && data.temp_ambient !== null && data.temp_ambient !== undefined;
+    const hasBask = data.temp_basking !== '' && data.temp_basking !== null && data.temp_basking !== undefined;
+    const hasCool = data.temp_cool !== '' && data.temp_cool !== null && data.temp_cool !== undefined;
+    return hasAmb || hasBask || hasCool;
+  }, 'At least one temperature reading (Ambient, Basking, or Cool) is required.')
+);
 
 const extractErrorText = (errors: unknown): string | null => {
   if (!errors) return null;
@@ -62,7 +66,7 @@ const FieldError = ({ meta }: { meta: { errors?: unknown[] } }) => {
   if (!meta.errors || meta.errors.length === 0) return null;
   const text = extractErrorText(meta.errors);
   if (!text) return null;
-  return <p className="text-xs text-rose-500 mt-1 font-bold">{text}</p>;
+  return <p className="text-[10px] text-rose-500 mt-0.5 font-bold">{text}</p>;
 };
 
 const formatLocalDatetime = (dateString?: string) => {
@@ -77,136 +81,34 @@ const getDefaultDateTime = (selectedDate?: string) => {
   const tzOffset = now.getTimezoneOffset() * 60000;
   const localNow = new Date(now.getTime() - tzOffset);
   const localTimeStr = localNow.toISOString().slice(11, 16);
-  return selectedDate ? `${selectedDate}T${localTimeStr}` : localNow.toISOString().slice(0, 16);
+  if (!selectedDate) return localNow.toISOString().slice(0, 16);
+  if (selectedDate.includes('T')) return formatLocalDatetime(selectedDate);
+  return `${selectedDate}T${localTimeStr}`;
 };
-
-// --- UNIFIED INPUT COMPONENTS ---
-function FormInput({
-  field,
-  label,
-  type = 'text',
-  placeholder,
-  hasError,
-  rightAddon,
-  step,
-}: {
-  field: FieldApi<any, any, any, any>;
-  label: string;
-  type?: string;
-  placeholder?: string;
-  hasError?: boolean;
-  rightAddon?: ReactNode;
-  step?: string;
-}) {
-  const baseClasses = `w-full p-2.5 bg-slate-50 border rounded-xl outline-none text-sm md:text-xs font-bold text-slate-800 transition-all focus:bg-white focus:ring-4 ${
-    hasError
-      ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10'
-      : 'border-slate-200 focus:border-slate-400 focus:ring-slate-900/5'
-  }`;
-
-  return (
-    <div className="flex flex-col gap-1 w-full font-sans">
-      <label htmlFor={field.name} className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">
-        {label}
-      </label>
-      <div className="relative w-full">
-        <input
-          id={field.name}
-          type={type === 'number' ? 'number' : type}
-          inputMode={type === 'number' ? 'decimal' : undefined}
-          step={step}
-          value={field.state.value ?? ''}
-          onBlur={field.handleBlur}
-          onChange={(e) => {
-            if (type === 'number') {
-              field.handleChange(e.target.value === '' ? undefined : Number.parseFloat(e.target.value));
-            } else {
-              field.handleChange(e.target.value);
-            }
-          }}
-          placeholder={placeholder}
-          className={baseClasses}
-          style={rightAddon ? { paddingRight: '2.5rem' } : undefined}
-        />
-        {rightAddon && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-            {rightAddon}
-          </div>
-        )}
-      </div>
-      <FieldError meta={field.state.meta} />
-    </div>
-  );
-}
-
-function FormSelect({
-  field,
-  label,
-  options,
-  placeholder,
-  hasError,
-}: {
-  field: FieldApi<any, any, any, any>;
-  label: string;
-  options: { value: string | number; label: string }[];
-  placeholder?: string;
-  hasError?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-1 w-full font-sans">
-      <label htmlFor={field.name} className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">
-        {label}
-      </label>
-      <select
-        id={field.name}
-        value={field.state.value ?? ''}
-        onBlur={field.handleBlur}
-        onChange={(e) => field.handleChange(e.target.value)}
-        className={`w-full p-2.5 bg-slate-50 border rounded-xl outline-none text-sm md:text-xs font-bold text-slate-800 transition-all focus:bg-white focus:ring-4 cursor-pointer appearance-none ${
-          hasError
-            ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10'
-            : 'border-slate-200 focus:border-slate-400 focus:ring-slate-900/5'
-        }`}
-      >
-        {placeholder && <option value="" disabled>{placeholder}</option>}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <FieldError meta={field.state.meta} />
-    </div>
-  );
-}
-
-// --- VALIBOT VALIDATION SCHEMA ---
-const TemperatureSchema = v.pipe(
-  v.object({
-    recorded_by: v.pipe(v.string(), v.minLength(1, 'ZLA COMPLIANCE: An active staff member must be selected.')),
-    recorded_at: v.pipe(v.string(), v.minLength(1, 'Date and time required')),
-    temp_ambient: v.optional(v.number()),
-    temp_basking: v.optional(v.number()),
-    temp_cool: v.optional(v.number()),
-  }),
-  v.check(
-    (data) => data.temp_ambient !== undefined || data.temp_basking !== undefined || data.temp_cool !== undefined,
-    'Please enter a valid temperature reading.'
-  )
-);
 
 export function TemperatureModal({
   isOpen,
   onClose,
   animalId,
-  ambientOnly,
+  animal: propAnimal,
+  ambientOnly: propAmbientOnly,
   initialData,
   selectedDate,
 }: TemperatureModalProps) {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
 
-  const { data: activeStaff = [] } = useQuery<ActiveStaffUser[]>({
+  const targetAnimalId = propAnimal?.id || animalId || initialData?.animal_id || '';
+
+  const animal = useMemo(() => {
+    if (propAnimal) return propAnimal;
+    const cachedAnimals = queryClient.getQueryData<Animal[]>(['animals', 'dashboard']) || [];
+    return cachedAnimals.find((a) => a.id === targetAnimalId);
+  }, [propAnimal, queryClient, targetAnimalId]);
+
+  const isAmbientOnly = propAmbientOnly ?? animal?.ambient_temp_only ?? (animal?.category !== 'EXOTIC');
+
+  const { data: activeStaff = [] } = useQuery<User[]>({
     queryKey: ['active-staff'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -216,53 +118,77 @@ export function TemperatureModal({
         .eq('is_deleted', false)
         .order('name');
       if (error) throw error;
-      return (data || []) as ActiveStaffUser[];
+      return (data || []) as User[];
     },
-    staleTime: 0,
-    gcTime: 1209600000,
+    staleTime: 1000 * 60 * 15,
+    gcTime: 1000 * 60 * 60 * 24 * 14,
     networkMode: 'offlineFirst',
   });
 
-  const animal = useMemo(() => {
-    const cachedAnimals = queryClient.getQueryData<Animal[]>(['animals', 'dashboard']) || [];
-    return cachedAnimals.find((a) => a.id === animalId);
-  }, [queryClient, animalId]);
-
-  const insertTempMutation = useMutation({
+  const insertTemperatureMutation = useMutation({
     mutationFn: async (values: TemperatureFormValues) => {
       const result = v.safeParse(TemperatureSchema, values);
       if (!result.success) {
         throw new Error(result.issues[0]?.message || 'Validation failed');
       }
 
-      let tempAverage: number | null = null;
-      if (values.temp_basking !== undefined && values.temp_cool !== undefined) {
-        tempAverage = Math.round(((values.temp_basking + values.temp_cool) / 2) * 10) / 10;
+      if (!targetAnimalId) {
+        throw new Error('Target specimen identifier is missing.');
       }
 
+      const baskingNum = values.temp_basking !== '' && values.temp_basking !== null && values.temp_basking !== undefined ? Number(values.temp_basking) : null;
+      const coolNum = values.temp_cool !== '' && values.temp_cool !== null && values.temp_cool !== undefined ? Number(values.temp_cool) : null;
+      const ambientNum = values.temp_ambient !== '' && values.temp_ambient !== null && values.temp_ambient !== undefined ? Number(values.temp_ambient) : null;
+      const humidityNum = values.humidity_percent !== '' && values.humidity_percent !== null && values.humidity_percent !== undefined ? Number(values.humidity_percent) : null;
+
+      let averageNum: number | null = null;
+      if (baskingNum !== null && coolNum !== null) {
+        averageNum = Number(((baskingNum + coolNum) / 2).toFixed(1));
+      } else if (baskingNum !== null) {
+        averageNum = baskingNum;
+      } else if (ambientNum !== null) {
+        averageNum = ambientNum;
+      }
+
+      const recordId =
+        initialData?.id ||
+        (typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).substring(2));
+
       const payload = {
-        id: initialData?.id || crypto.randomUUID(),
-        animal_id: animalId,
+        id: recordId,
+        animal_id: targetAnimalId,
         recorded_by: values.recorded_by,
         recorded_at: new Date(values.recorded_at).toISOString(),
-        created_by: profile?.id,
-        temp_ambient: values.temp_ambient ?? null,
-        temp_basking: values.temp_basking ?? null,
-        temp_cool: values.temp_cool ?? null,
-        temp_average: tempAverage,
+        created_by: profile?.id || null,
+        temp_ambient: ambientNum,
+        temp_basking: baskingNum,
+        temp_cool: coolNum,
+        temp_average: averageNum,
+        humidity_percent: humidityNum,
+        notes: values.notes?.trim() || null,
+        is_deleted: false,
       };
 
-      return await temperatureService.insertTemperatureLog(payload);
+      const { data, error } = await supabase
+        .from('temperature_logs')
+        .upsert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
-      toast.success(initialData?.id ? 'Temperature updated successfully' : 'Temperature logged successfully');
+      toast.success(initialData?.id ? 'Thermal telemetry updated' : 'Thermal readings logged');
       queryClient.invalidateQueries({ queryKey: ['temperatures'] });
       queryClient.invalidateQueries({ queryKey: ['temperature_logs'] });
       queryClient.invalidateQueries({ queryKey: ['daily_logs'] });
       onClose();
     },
-    onError: (error: unknown) => {
-      const msg = error instanceof Error ? error.message : 'Failed to log temperature';
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : 'Failed to log thermal reading';
       toast.error(msg);
     },
   });
@@ -270,22 +196,26 @@ export function TemperatureModal({
   const form = useForm<TemperatureFormValues>({
     defaultValues: {
       recorded_by: initialData?.recorded_by || profile?.id || '',
-      recorded_at: initialData?.recorded_at ? formatLocalDatetime(initialData.recorded_at) : getDefaultDateTime(selectedDate),
-      temp_ambient: initialData?.temp_ambient ?? initialData?.temperature_c ?? undefined,
-      temp_basking: initialData?.temp_basking ?? initialData?.basking_temp_c ?? undefined,
-      temp_cool: initialData?.temp_cool ?? initialData?.cool_temp_c ?? undefined,
+      recorded_at: initialData?.recorded_at
+        ? formatLocalDatetime(initialData.recorded_at)
+        : getDefaultDateTime(selectedDate),
+      temp_ambient: initialData?.temp_ambient ?? '',
+      temp_basking: initialData?.temp_basking ?? '',
+      temp_cool: initialData?.temp_cool ?? '',
+      humidity_percent: initialData?.humidity_percent ?? '',
+      notes: initialData?.notes || '',
     },
     validators: {
       onSubmit: ({ value }) => {
         const result = v.safeParse(TemperatureSchema, value);
         if (!result.success) {
-          return result.issues[0]?.message || 'Validation error';
+          return result.issues[0]?.message || 'Please complete all required fields';
         }
         return undefined;
       },
     },
     onSubmit: async ({ value }) => {
-      await insertTempMutation.mutateAsync(value);
+      await insertTemperatureMutation.mutateAsync(value);
     },
   });
 
@@ -294,16 +224,25 @@ export function TemperatureModal({
       form.reset();
       if (initialData) {
         form.setFieldValue('recorded_by', initialData.recorded_by || profile?.id || '');
-        form.setFieldValue('recorded_at', initialData.recorded_at ? formatLocalDatetime(initialData.recorded_at) : getDefaultDateTime(selectedDate));
-        form.setFieldValue('temp_ambient', initialData.temp_ambient ?? initialData.temperature_c ?? undefined);
-        form.setFieldValue('temp_basking', initialData.temp_basking ?? initialData.basking_temp_c ?? undefined);
-        form.setFieldValue('temp_cool', initialData.temp_cool ?? initialData.cool_temp_c ?? undefined);
+        form.setFieldValue(
+          'recorded_at',
+          initialData.recorded_at
+            ? formatLocalDatetime(initialData.recorded_at)
+            : getDefaultDateTime(selectedDate)
+        );
+        form.setFieldValue('temp_ambient', initialData.temp_ambient ?? '');
+        form.setFieldValue('temp_basking', initialData.temp_basking ?? '');
+        form.setFieldValue('temp_cool', initialData.temp_cool ?? '');
+        form.setFieldValue('humidity_percent', initialData.humidity_percent ?? '');
+        form.setFieldValue('notes', initialData.notes || '');
       } else {
         form.setFieldValue('recorded_by', profile?.id || '');
         form.setFieldValue('recorded_at', getDefaultDateTime(selectedDate));
-        form.setFieldValue('temp_ambient', undefined);
-        form.setFieldValue('temp_basking', undefined);
-        form.setFieldValue('temp_cool', undefined);
+        form.setFieldValue('temp_ambient', '');
+        form.setFieldValue('temp_basking', '');
+        form.setFieldValue('temp_cool', '');
+        form.setFieldValue('humidity_percent', '');
+        form.setFieldValue('notes', '');
       }
     }
   }, [isOpen, initialData, selectedDate, profile?.id, form]);
@@ -311,168 +250,267 @@ export function TemperatureModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-70 flex flex-col items-center justify-center p-0 md:p-4 bg-slate-900/60 backdrop-blur-xs font-sans">
-      <div className="bg-white w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col border-0 md:border md:border-slate-200 relative">
-        {/* HEADER */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200 font-sans">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden border border-slate-200/80">
+        {/* Header Bar */}
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-orange-50">
-              <ThermometerSun size={18} className="text-orange-600" />
+            <div className="w-9 h-9 rounded-2xl bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center font-black shadow-xs shrink-0">
+              <ThermometerSun size={18} />
             </div>
             <div>
-              <h2 className="text-[15px] font-black text-slate-900 uppercase tracking-widest leading-tight">
-                {initialData?.id ? 'Edit Temperature' : 'Log Temperature'}
+              <h2 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight leading-none">
+                {initialData?.id ? 'Edit Thermal Telemetry' : 'Log Thermal Reading'}
               </h2>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-tight">
-                {animal?.name || 'Collection Specimen'}
+              <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                Specimen • <span className="text-orange-700 font-bold">{animal?.name || 'Collection Specimen'}</span>
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+            className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
           >
-            <X size={20} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* FORM */}
+        {/* Form Body */}
         <form
           onSubmit={(e) => {
             e.preventDefault();
             e.stopPropagation();
             form.handleSubmit();
           }}
-          className="p-5 overflow-y-auto custom-scrollbar bg-white flex-1 relative space-y-6"
+          className="p-4 sm:p-5 space-y-3.5 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1"
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <form.Field name="recorded_at">
-              {(field) => <FormInput field={field} label="Date & Time" type="datetime-local" />}
-            </form.Field>
+          {/* Keeper and Date Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
             <form.Field name="recorded_by">
-              {(field) => (
-                <FormSelect
-                  field={field}
-                  label="Conducted By *"
-                  placeholder="-- Select Keeper --"
-                  options={activeStaff.map((s) => ({
-                    value: s.id,
-                    label: `${s.name} ${s.initials ? `(${s.initials})` : ''}`,
-                  }))}
-                />
+              {(field: FieldApi<TemperatureFormValues, 'recorded_by', any, any>) => (
+                <div className="space-y-1">
+                  <label
+                    htmlFor="temp-recorded-by"
+                    className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500"
+                  >
+                    Conducted By *
+                  </label>
+                  <select
+                    id="temp-recorded-by"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 cursor-pointer"
+                  >
+                    <option value="" disabled>-- Select Keeper --</option>
+                    {activeStaff.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name} {staff.initials ? `(${staff.initials})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <FieldError meta={field.state.meta} />
+                </div>
+              )}
+            </form.Field>
+
+            <form.Field name="recorded_at">
+              {(field: FieldApi<TemperatureFormValues, 'recorded_at', any, any>) => (
+                <div className="space-y-1">
+                  <label
+                    htmlFor="temp-recorded-at"
+                    className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500"
+                  >
+                    Date &amp; Time
+                  </label>
+                  <input
+                    id="temp-recorded-at"
+                    type="datetime-local"
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                  />
+                  <FieldError meta={field.state.meta} />
+                </div>
               )}
             </form.Field>
           </div>
 
           <hr className="border-slate-100" />
 
-          {/* TEMPERATURE INPUTS */}
-          <div className="space-y-4">
-            {ambientOnly ? (
+          {/* Temperature Controls */}
+          {isAmbientOnly ? (
+            <div className="bg-orange-50/40 p-3.5 rounded-2xl border border-orange-100 space-y-2">
+              <span className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-orange-950">
+                Weathering / Ambient Enclosure Temperature
+              </span>
               <form.Field name="temp_ambient">
-                {(field) => (
-                  <FormInput
-                    field={field}
-                    label="Ambient Enclosure (°C)"
-                    type="number"
-                    step="0.1"
-                    rightAddon={<span className="text-slate-400 font-bold text-xs">°C</span>}
-                  />
+                {(field: FieldApi<TemperatureFormValues, 'temp_ambient', any, any>) => (
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={field.state.value ?? ''}
+                      onChange={(e) => field.handleChange(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="e.g. 18.5"
+                      className="w-full bg-white border border-orange-200 rounded-xl pl-3 pr-10 py-2.5 text-lg font-black text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">
+                      °C
+                    </span>
+                  </div>
                 )}
               </form.Field>
-            ) : (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <form.Field name="temp_basking">
-                    {(field) => (
-                      <FormInput
-                        field={field}
-                        label="Basking Spot (°C)"
-                        type="number"
-                        step="0.1"
-                        rightAddon={<span className="text-orange-400 font-bold text-xs">°C</span>}
-                      />
-                    )}
-                  </form.Field>
-                  <form.Field name="temp_cool">
-                    {(field) => (
-                      <FormInput
-                        field={field}
-                        label="Cool End (°C)"
-                        type="number"
-                        step="0.1"
-                        rightAddon={<span className="text-blue-400 font-bold text-xs">°C</span>}
-                      />
-                    )}
-                  </form.Field>
-                </div>
-
-                {/* CALCULATED AVERAGE */}
-                <form.Subscribe
-                  selector={(state) => ({
-                    basking: state.values.temp_basking,
-                    cool: state.values.temp_cool,
-                  })}
-                >
-                  {({ basking, cool }) => {
-                    const hasBoth = basking !== undefined && cool !== undefined;
-                    const avg = hasBoth ? ((basking + cool) / 2).toFixed(1) : '--';
-                    return (
-                      <div className="pt-2 flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
-                          Calculated Gradient Average
-                        </span>
-                        <span className={`text-xl font-black ${hasBoth ? 'text-slate-800' : 'text-slate-300'}`}>
-                          {avg} <span className="text-sm text-slate-400">°C</span>
+            </div>
+          ) : (
+            <div className="bg-orange-50/40 p-3.5 rounded-2xl border border-orange-100 space-y-3">
+              <span className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-orange-950">
+                Dual-Zone Enclosure Thermal Gradient
+              </span>
+              <div className="grid grid-cols-2 gap-2.5">
+                <form.Field name="temp_basking">
+                  {(field: FieldApi<TemperatureFormValues, 'temp_basking', any, any>) => (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-orange-900">
+                        Basking / Hot Zone
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={field.state.value ?? ''}
+                          onChange={(e) => field.handleChange(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                          placeholder="e.g. 32.0"
+                          className="w-full bg-white border border-orange-200 rounded-xl pl-3 pr-8 py-2 text-sm font-black text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">
+                          °C
                         </span>
                       </div>
-                    );
-                  }}
-                </form.Subscribe>
+                    </div>
+                  )}
+                </form.Field>
+
+                <form.Field name="temp_cool">
+                  {(field: FieldApi<TemperatureFormValues, 'temp_cool', any, any>) => (
+                    <div className="space-y-1">
+                      <label className="block text-[9px] font-black uppercase tracking-widest text-blue-900">
+                        Cool / Hide Zone
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={field.state.value ?? ''}
+                          onChange={(e) => field.handleChange(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                          placeholder="e.g. 24.5"
+                          className="w-full bg-white border border-blue-200 rounded-xl pl-3 pr-8 py-2 text-sm font-black text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">
+                          °C
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </form.Field>
+              </div>
+
+              {/* Dynamic Mean Calculation Preview */}
+              <form.Subscribe
+                selector={(state) => [state.values.temp_basking, state.values.temp_cool]}
+                children={([bask, cool]) => {
+                  const b = Number(bask);
+                  const c = Number(cool);
+                  if (Number.isNaN(b) || Number.isNaN(c) || bask === '' || cool === '') return null;
+                  const avg = ((b + c) / 2).toFixed(1);
+                  return (
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-white/80 rounded-xl border border-orange-200/60 text-[10px] font-bold text-slate-600">
+                      <span className="uppercase tracking-widest text-slate-400">Calculated Mean</span>
+                      <span className="font-black text-orange-700 font-mono text-xs">{avg}°C</span>
+                    </div>
+                  );
+                }}
+              />
+            </div>
+          )}
+
+          {/* Enclosure Humidity */}
+          <form.Field name="humidity_percent">
+            {(field: FieldApi<TemperatureFormValues, 'humidity_percent', any, any>) => (
+              <div className="space-y-1">
+                <label
+                  htmlFor="temp-humidity"
+                  className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1"
+                >
+                  <Droplets size={11} className="text-cyan-600" /> Enclosure Humidity Level (%)
+                </label>
+                <div className="relative">
+                  <input
+                    id="temp-humidity"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={field.state.value ?? ''}
+                    onChange={(e) => field.handleChange(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    placeholder="e.g. 65"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-8 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">
+                    %
+                  </span>
+                </div>
+                <FieldError meta={field.state.meta} />
               </div>
             )}
+          </form.Field>
 
-            <form.Subscribe selector={(state) => state.errorMap}>
-              {(errorMap) => {
-                const text = extractErrorText(errorMap?.onSubmit);
-                return text ? (
-                  <div className="pt-1">
-                    <p className="text-xs text-rose-500 font-bold">{text}</p>
-                  </div>
-                ) : null;
-              }}
-            </form.Subscribe>
+          {/* Husbandry Notes */}
+          <form.Field name="notes">
+            {(field: FieldApi<TemperatureFormValues, 'notes', any, any>) => (
+              <div className="space-y-1">
+                <label
+                  htmlFor="temp-notes"
+                  className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500"
+                >
+                  Notes / Observations
+                </label>
+                <textarea
+                  id="temp-notes"
+                  rows={2}
+                  value={field.state.value || ''}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 resize-none"
+                  placeholder="Basking lamp replaced, thermostat adjusted..."
+                />
+              </div>
+            )}
+          </form.Field>
+
+          {/* Action Buttons */}
+          <div className="pt-2 flex items-center justify-end gap-2 sm:gap-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 py-2 bg-slate-100 text-slate-700 font-bold text-[10px] sm:text-xs uppercase tracking-widest rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <form.Subscribe
+              selector={(state) => [state.isSubmitting]}
+              children={([isSubmitting]) => (
+                <button
+                  type="submit"
+                  disabled={insertTemperatureMutation.isPending || isSubmitting}
+                  className="flex items-center gap-1.5 px-4 sm:px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white font-black text-[10px] sm:text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {insertTemperatureMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {initialData?.id ? 'Update Telemetry' : 'Log Temperature'}
+                </button>
+              )}
+            />
           </div>
         </form>
-
-        {/* FOOTER */}
-        <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-end bg-white gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <form.Subscribe selector={(state) => [state.isSubmitting]}>
-            {([isSubmitting]) => (
-              <button
-                type="button"
-                onClick={form.handleSubmit}
-                disabled={insertTempMutation.isPending || isSubmitting}
-                className="flex items-center justify-center gap-2 px-8 py-2.5 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md disabled:opacity-50 bg-orange-600 hover:bg-orange-500 cursor-pointer"
-              >
-                {isSubmitting || insertTempMutation.isPending ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Save size={16} />
-                )}
-                {initialData?.id ? 'Update Temp' : 'Log Temp'}
-              </button>
-            )}
-          </form.Subscribe>
-        </div>
       </div>
     </div>
   );

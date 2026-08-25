@@ -21,6 +21,7 @@
     "@tanstack/react-router": "^1.170.32",
     "@tanstack/react-table": "^9.1.2",
     "@tanstack/react-virtual": "^3.14.10",
+    "@tanstack/router-plugin": "^1.168.35",
     "@vitejs/plugin-react": "^6.1.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
