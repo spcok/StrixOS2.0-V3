@@ -10,6 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ClinicalIsolationRouteImport } from './routes/clinical/isolation'
+import { Route as ClinicalMedicationsRouteImport } from './routes/clinical/medications'
+import { Route as ClinicalMortalityRouteImport } from './routes/clinical/mortality'
+import { Route as ClinicalRecordsRouteImport } from './routes/clinical/records'
 import { Route as HusbandryDailyLogsRouteImport } from './routes/husbandry/daily-logs'
 import { Route as HusbandryFeedingRouteImport } from './routes/husbandry/feeding'
 import { Route as HusbandryMissingRecordsRouteImport } from './routes/husbandry/missing-records'
@@ -18,6 +22,26 @@ import { Route as HusbandryRoundsRouteImport } from './routes/husbandry/rounds'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClinicalIsolationRoute = ClinicalIsolationRouteImport.update({
+  id: '/clinical/isolation',
+  path: '/clinical/isolation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClinicalMedicationsRoute = ClinicalMedicationsRouteImport.update({
+  id: '/clinical/medications',
+  path: '/clinical/medications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClinicalMortalityRoute = ClinicalMortalityRouteImport.update({
+  id: '/clinical/mortality',
+  path: '/clinical/mortality',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClinicalRecordsRoute = ClinicalRecordsRouteImport.update({
+  id: '/clinical/records',
+  path: '/clinical/records',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HusbandryDailyLogsRoute = HusbandryDailyLogsRouteImport.update({
@@ -43,6 +67,10 @@ const HusbandryRoundsRoute = HusbandryRoundsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/clinical/isolation': typeof ClinicalIsolationRoute
+  '/clinical/medications': typeof ClinicalMedicationsRoute
+  '/clinical/mortality': typeof ClinicalMortalityRoute
+  '/clinical/records': typeof ClinicalRecordsRoute
   '/husbandry/daily-logs': typeof HusbandryDailyLogsRoute
   '/husbandry/feeding': typeof HusbandryFeedingRoute
   '/husbandry/missing-records': typeof HusbandryMissingRecordsRoute
@@ -50,6 +78,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/clinical/isolation': typeof ClinicalIsolationRoute
+  '/clinical/medications': typeof ClinicalMedicationsRoute
+  '/clinical/mortality': typeof ClinicalMortalityRoute
+  '/clinical/records': typeof ClinicalRecordsRoute
   '/husbandry/daily-logs': typeof HusbandryDailyLogsRoute
   '/husbandry/feeding': typeof HusbandryFeedingRoute
   '/husbandry/missing-records': typeof HusbandryMissingRecordsRoute
@@ -58,6 +90,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/clinical/isolation': typeof ClinicalIsolationRoute
+  '/clinical/medications': typeof ClinicalMedicationsRoute
+  '/clinical/mortality': typeof ClinicalMortalityRoute
+  '/clinical/records': typeof ClinicalRecordsRoute
   '/husbandry/daily-logs': typeof HusbandryDailyLogsRoute
   '/husbandry/feeding': typeof HusbandryFeedingRoute
   '/husbandry/missing-records': typeof HusbandryMissingRecordsRoute
@@ -67,6 +103,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/clinical/isolation'
+    | '/clinical/medications'
+    | '/clinical/mortality'
+    | '/clinical/records'
     | '/husbandry/daily-logs'
     | '/husbandry/feeding'
     | '/husbandry/missing-records'
@@ -74,6 +114,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/clinical/isolation'
+    | '/clinical/medications'
+    | '/clinical/mortality'
+    | '/clinical/records'
     | '/husbandry/daily-logs'
     | '/husbandry/feeding'
     | '/husbandry/missing-records'
@@ -81,6 +125,10 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/clinical/isolation'
+    | '/clinical/medications'
+    | '/clinical/mortality'
+    | '/clinical/records'
     | '/husbandry/daily-logs'
     | '/husbandry/feeding'
     | '/husbandry/missing-records'
@@ -89,6 +137,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClinicalIsolationRoute: typeof ClinicalIsolationRoute
+  ClinicalMedicationsRoute: typeof ClinicalMedicationsRoute
+  ClinicalMortalityRoute: typeof ClinicalMortalityRoute
+  ClinicalRecordsRoute: typeof ClinicalRecordsRoute
   HusbandryDailyLogsRoute: typeof HusbandryDailyLogsRoute
   HusbandryFeedingRoute: typeof HusbandryFeedingRoute
   HusbandryMissingRecordsRoute: typeof HusbandryMissingRecordsRoute
@@ -102,6 +154,34 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clinical/isolation': {
+      id: '/clinical/isolation'
+      path: '/clinical/isolation'
+      fullPath: '/clinical/isolation'
+      preLoaderRoute: typeof ClinicalIsolationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clinical/medications': {
+      id: '/clinical/medications'
+      path: '/clinical/medications'
+      fullPath: '/clinical/medications'
+      preLoaderRoute: typeof ClinicalMedicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clinical/mortality': {
+      id: '/clinical/mortality'
+      path: '/clinical/mortality'
+      fullPath: '/clinical/mortality'
+      preLoaderRoute: typeof ClinicalMortalityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clinical/records': {
+      id: '/clinical/records'
+      path: '/clinical/records'
+      fullPath: '/clinical/records'
+      preLoaderRoute: typeof ClinicalRecordsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/husbandry/daily-logs': {
@@ -137,6 +217,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClinicalIsolationRoute: ClinicalIsolationRoute,
+  ClinicalMedicationsRoute: ClinicalMedicationsRoute,
+  ClinicalMortalityRoute: ClinicalMortalityRoute,
+  ClinicalRecordsRoute: ClinicalRecordsRoute,
   HusbandryDailyLogsRoute: HusbandryDailyLogsRoute,
   HusbandryFeedingRoute: HusbandryFeedingRoute,
   HusbandryMissingRecordsRoute: HusbandryMissingRecordsRoute,
