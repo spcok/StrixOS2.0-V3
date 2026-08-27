@@ -18,6 +18,11 @@ import { Route as HusbandryDailyLogsRouteImport } from './routes/husbandry/daily
 import { Route as HusbandryFeedingRouteImport } from './routes/husbandry/feeding'
 import { Route as HusbandryMissingRecordsRouteImport } from './routes/husbandry/missing-records'
 import { Route as HusbandryRoundsRouteImport } from './routes/husbandry/rounds'
+import { Route as LogisticsCalendarRouteImport } from './routes/logistics/calendar'
+import { Route as LogisticsEventsRouteImport } from './routes/logistics/events'
+import { Route as LogisticsExternalTransfersRouteImport } from './routes/logistics/external-transfers'
+import { Route as LogisticsInternalMovementsRouteImport } from './routes/logistics/internal-movements'
+import { Route as LogisticsVouchersRouteImport } from './routes/logistics/vouchers'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +69,33 @@ const HusbandryRoundsRoute = HusbandryRoundsRouteImport.update({
   path: '/husbandry/rounds',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LogisticsCalendarRoute = LogisticsCalendarRouteImport.update({
+  id: '/logistics/calendar',
+  path: '/logistics/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogisticsEventsRoute = LogisticsEventsRouteImport.update({
+  id: '/logistics/events',
+  path: '/logistics/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogisticsExternalTransfersRoute =
+  LogisticsExternalTransfersRouteImport.update({
+    id: '/logistics/external-transfers',
+    path: '/logistics/external-transfers',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const LogisticsInternalMovementsRoute =
+  LogisticsInternalMovementsRouteImport.update({
+    id: '/logistics/internal-movements',
+    path: '/logistics/internal-movements',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const LogisticsVouchersRoute = LogisticsVouchersRouteImport.update({
+  id: '/logistics/vouchers',
+  path: '/logistics/vouchers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +107,11 @@ export interface FileRoutesByFullPath {
   '/husbandry/feeding': typeof HusbandryFeedingRoute
   '/husbandry/missing-records': typeof HusbandryMissingRecordsRoute
   '/husbandry/rounds': typeof HusbandryRoundsRoute
+  '/logistics/calendar': typeof LogisticsCalendarRoute
+  '/logistics/events': typeof LogisticsEventsRoute
+  '/logistics/external-transfers': typeof LogisticsExternalTransfersRoute
+  '/logistics/internal-movements': typeof LogisticsInternalMovementsRoute
+  '/logistics/vouchers': typeof LogisticsVouchersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +123,11 @@ export interface FileRoutesByTo {
   '/husbandry/feeding': typeof HusbandryFeedingRoute
   '/husbandry/missing-records': typeof HusbandryMissingRecordsRoute
   '/husbandry/rounds': typeof HusbandryRoundsRoute
+  '/logistics/calendar': typeof LogisticsCalendarRoute
+  '/logistics/events': typeof LogisticsEventsRoute
+  '/logistics/external-transfers': typeof LogisticsExternalTransfersRoute
+  '/logistics/internal-movements': typeof LogisticsInternalMovementsRoute
+  '/logistics/vouchers': typeof LogisticsVouchersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +140,11 @@ export interface FileRoutesById {
   '/husbandry/feeding': typeof HusbandryFeedingRoute
   '/husbandry/missing-records': typeof HusbandryMissingRecordsRoute
   '/husbandry/rounds': typeof HusbandryRoundsRoute
+  '/logistics/calendar': typeof LogisticsCalendarRoute
+  '/logistics/events': typeof LogisticsEventsRoute
+  '/logistics/external-transfers': typeof LogisticsExternalTransfersRoute
+  '/logistics/internal-movements': typeof LogisticsInternalMovementsRoute
+  '/logistics/vouchers': typeof LogisticsVouchersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +158,11 @@ export interface FileRouteTypes {
     | '/husbandry/feeding'
     | '/husbandry/missing-records'
     | '/husbandry/rounds'
+    | '/logistics/calendar'
+    | '/logistics/events'
+    | '/logistics/external-transfers'
+    | '/logistics/internal-movements'
+    | '/logistics/vouchers'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +174,11 @@ export interface FileRouteTypes {
     | '/husbandry/feeding'
     | '/husbandry/missing-records'
     | '/husbandry/rounds'
+    | '/logistics/calendar'
+    | '/logistics/events'
+    | '/logistics/external-transfers'
+    | '/logistics/internal-movements'
+    | '/logistics/vouchers'
   id:
     | '__root__'
     | '/'
@@ -133,6 +190,11 @@ export interface FileRouteTypes {
     | '/husbandry/feeding'
     | '/husbandry/missing-records'
     | '/husbandry/rounds'
+    | '/logistics/calendar'
+    | '/logistics/events'
+    | '/logistics/external-transfers'
+    | '/logistics/internal-movements'
+    | '/logistics/vouchers'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -145,6 +207,11 @@ export interface RootRouteChildren {
   HusbandryFeedingRoute: typeof HusbandryFeedingRoute
   HusbandryMissingRecordsRoute: typeof HusbandryMissingRecordsRoute
   HusbandryRoundsRoute: typeof HusbandryRoundsRoute
+  LogisticsCalendarRoute: typeof LogisticsCalendarRoute
+  LogisticsEventsRoute: typeof LogisticsEventsRoute
+  LogisticsExternalTransfersRoute: typeof LogisticsExternalTransfersRoute
+  LogisticsInternalMovementsRoute: typeof LogisticsInternalMovementsRoute
+  LogisticsVouchersRoute: typeof LogisticsVouchersRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +279,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HusbandryRoundsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/logistics/calendar': {
+      id: '/logistics/calendar'
+      path: '/logistics/calendar'
+      fullPath: '/logistics/calendar'
+      preLoaderRoute: typeof LogisticsCalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logistics/events': {
+      id: '/logistics/events'
+      path: '/logistics/events'
+      fullPath: '/logistics/events'
+      preLoaderRoute: typeof LogisticsEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logistics/external-transfers': {
+      id: '/logistics/external-transfers'
+      path: '/logistics/external-transfers'
+      fullPath: '/logistics/external-transfers'
+      preLoaderRoute: typeof LogisticsExternalTransfersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logistics/internal-movements': {
+      id: '/logistics/internal-movements'
+      path: '/logistics/internal-movements'
+      fullPath: '/logistics/internal-movements'
+      preLoaderRoute: typeof LogisticsInternalMovementsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logistics/vouchers': {
+      id: '/logistics/vouchers'
+      path: '/logistics/vouchers'
+      fullPath: '/logistics/vouchers'
+      preLoaderRoute: typeof LogisticsVouchersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -225,6 +327,11 @@ const rootRouteChildren: RootRouteChildren = {
   HusbandryFeedingRoute: HusbandryFeedingRoute,
   HusbandryMissingRecordsRoute: HusbandryMissingRecordsRoute,
   HusbandryRoundsRoute: HusbandryRoundsRoute,
+  LogisticsCalendarRoute: LogisticsCalendarRoute,
+  LogisticsEventsRoute: LogisticsEventsRoute,
+  LogisticsExternalTransfersRoute: LogisticsExternalTransfersRoute,
+  LogisticsInternalMovementsRoute: LogisticsInternalMovementsRoute,
+  LogisticsVouchersRoute: LogisticsVouchersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

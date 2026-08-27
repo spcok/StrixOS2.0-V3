@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { MistLevel } from '../components/husbandry/MistModal';
+import type { MistLog } from '../types';
 
 export interface MistLogPayload {
   id?: string;
@@ -7,89 +7,99 @@ export interface MistLogPayload {
   recorded_by: string;
   recorded_at: string;
   created_by?: string | null;
-  am_pm: 'AM' | 'PM';
-  mist_level: MistLevel;
+  mist_level: 'LIGHT' | 'MEDIUM' | 'HEAVY' | string;
+  am_pm: 'AM' | 'PM' | string;
   notes?: string | null;
-}
-
-export interface MistLogRecord extends MistLogPayload {
-  id: string;
-  created_at?: string;
   is_deleted?: boolean;
 }
 
 export const mistService = {
   /**
-   * Upserts a misting telemetry record.
-   * Auto-assigns client-side UUIDs for offline mutation persistence.
+   * Fetch mist logs within a date-time window
    */
-  async insertMistLog(payload: MistLogPayload): Promise<MistLogRecord> {
-    const recordId =
-      payload.id ||
-      (typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : Math.random().toString(36).substring(2));
-
-    const { data, error } = await supabase
-      .from('mist_logs')
-      .upsert({
-        ...payload,
-        id: recordId,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.warn('[mistService] Misting log upsert failed / deferred:', error.message);
-      throw error;
-    }
-
-    return data as MistLogRecord;
-  },
-
-  /**
-   * Retrieves the most recent misting record for a specific animal.
-   */
-  async getLatestMistLog(animalId: string): Promise<MistLogRecord | null> {
-    if (!animalId) return null;
-
+  async getMistLogsByDate(startDateISO: string, endDateISO: string): Promise<MistLog[]> {
     const { data, error } = await supabase
       .from('mist_logs')
       .select('*')
-      .eq('animal_id', animalId)
-      .order('recorded_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[mistService] Failed to fetch latest mist log:', error.message);
-      return null;
-    }
-
-    return (data || null) as MistLogRecord | null;
-  },
-
-  /**
-   * Fetches misting history within a specific date range.
-   */
-  async getMistLogsByRange(
-    animalId: string,
-    startDate: string,
-    endDate: string
-  ): Promise<MistLogRecord[]> {
-    if (!animalId) return [];
-
-    const { data, error } = await supabase
-      .from('mist_logs')
-      .select('*')
-      .eq('animal_id', animalId)
-      .gte('recorded_at', `${startDate}T00:00:00.000Z`)
-      .lte('recorded_at', `${endDate}T23:59:59.999Z`)
+      .or('is_deleted.eq.false,is_deleted.is.null')
+      .gte('recorded_at', startDateISO)
+      .lte('recorded_at', endDateISO)
       .order('recorded_at', { ascending: false });
 
-    if (error) throw error;
-    return (data || []) as MistLogRecord[];
+    if (error) {
+      console.error('[MistService getMistLogsByDate Error]:', error);
+      throw new Error(error.message || error.details || 'Failed to fetch mist logs');
+    }
+    return (data || []) as MistLog[];
   },
+
+  /**
+   * Insert or update a mist log entry without non-existent schema columns
+   */
+  async insertMistLog(payload: MistLogPayload): Promise<MistLog> {
+    const sanitizedPayload = {
+      animal_id: payload.animal_id,
+      recorded_by: payload.recorded_by,
+      recorded_at: payload.recorded_at,
+      created_by: payload.created_by && payload.created_by.trim() ? payload.created_by : null,
+      mist_level: payload.mist_level,
+      am_pm: payload.am_pm,
+      notes: payload.notes && payload.notes.trim() ? payload.notes.trim() : null,
+      is_deleted: false,
+    };
+
+    if (payload.id) {
+      // UPDATE EXISTING RECORD
+      const { data, error } = await supabase
+        .from('mist_logs')
+        .update(sanitizedPayload)
+        .eq('id', payload.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[MistService update Error]:', error);
+        throw new Error(error.message || error.details || error.hint || 'Database update failed');
+      }
+      return data as MistLog;
+    } else {
+      // INSERT NEW RECORD
+      const newRecord = {
+        id: crypto.randomUUID(),
+        ...sanitizedPayload,
+      };
+
+      const { data, error } = await supabase
+        .from('mist_logs')
+        .insert([newRecord])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[MistService insert Error]:', error);
+        throw new Error(error.message || error.details || error.hint || 'Database insert failed');
+      }
+      return data as MistLog;
+    }
+  },
+
+  /**
+   * Soft-delete a mist log entry
+   */
+  async deleteMistLog(id: string): Promise<boolean> {
+    const { error } = await supabase
+      .from('mist_logs')
+      .update({ 
+        is_deleted: true 
+      })
+      .eq('id', id);
+
+    if (error) {
+      console.error('[MistService delete Error]:', error);
+      throw new Error(error.message || error.details || 'Database delete failed');
+    }
+    return true;
+  }
 };
 
 export default mistService;

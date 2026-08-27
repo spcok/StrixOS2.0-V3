@@ -1,9 +1,9 @@
-import { useEffect, useMemo } from 'react';
-import { useForm, type FieldApi } from '@tanstack/react-form';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useForm } from '@tanstack/react-form';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import * as v from 'valibot';
-import { X, Save, Loader2, Droplets, Sun, Moon } from 'lucide-react';
-import { toast } from 'sonner';
+import { X, Save, Loader2, Droplets, Sun, Moon, Users, Trash2 } from 'lucide-react';
+import { toast } from 'sonner'; 
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 import { mistService } from '../../services/mistService';
@@ -15,47 +15,36 @@ interface ActiveStaffUser {
   initials?: string | null;
 }
 
-export type MistLevel = 'LIGHT' | 'MEDIUM' | 'HEAVY' | 'DRENCH';
+const MistSchema = v.object({
+  recorded_by: v.pipe(v.string(), v.minLength(1, 'ZLA COMPLIANCE: An active staff member must be selected.')),
+  recorded_at: v.pipe(v.string(), v.minLength(1, 'Date and time required')),
+  mist_level: v.picklist(['LIGHT', 'MEDIUM', 'HEAVY']),
+  am_pm: v.picklist(['AM', 'PM']),
+  notes: v.optional(v.string()),
+});
 
-interface MistFormValues {
-  recorded_by: string;
-  recorded_at: string;
-  am_pm: 'AM' | 'PM';
-  mist_level: MistLevel;
-  notes?: string;
-}
+type MistFormValues = v.InferOutput<typeof MistSchema>;
 
-export interface MistModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  animalId?: string | null;
-  animal?: Animal | null;
-  initialData?: {
-    id?: string;
-    animal_id?: string;
-    recorded_by?: string;
-    recorded_at?: string;
-    log_date?: string;
-    am_pm?: 'AM' | 'PM' | string;
-    mist_level?: MistLevel | string;
-    notes?: string;
-  } | null;
-  selectedDate?: string;
+export interface MistModalProps { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  animalId: string; 
+  animal?: Animal | null; 
+  initialData?: any; 
+  selectedDate?: string; 
 }
 
 const extractErrorText = (errors: unknown): string | null => {
   if (!errors) return null;
   const errArray = Array.isArray(errors) ? errors : [errors];
   if (errArray.length === 0) return null;
-  const messages = errArray
-    .map((e) => {
-      if (typeof e === 'string') return e;
-      if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
-        return (e as { message: string }).message;
-      }
-      return null;
-    })
-    .filter(Boolean);
+  const messages = errArray.map((e) => {
+    if (typeof e === 'string') return e;
+    if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
+      return (e as { message: string }).message;
+    }
+    return null;
+  }).filter(Boolean);
   return messages.length > 0 ? messages.join(', ') : null;
 };
 
@@ -63,54 +52,100 @@ const FieldError = ({ meta }: { meta: { errors?: unknown[] } }) => {
   if (!meta.errors || meta.errors.length === 0) return null;
   const text = extractErrorText(meta.errors);
   if (!text) return null;
-  return <p className="text-[10px] text-rose-500 mt-0.5 font-bold">{text}</p>;
+  return <p className="text-[10px] text-rose-500 mt-0.5 font-bold text-left">{text}</p>;
 };
 
-const formatLocalDatetime = (dateString?: string) => {
+const formatLocalDatetime = (dateString?: string): string => {
   const d = dateString ? new Date(dateString) : new Date();
   if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 16);
-  const tzOffset = d.getTimezoneOffset() * 60000;
-  return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16);
+  const offset = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 };
 
-const getDefaultDateTime = (selectedDate?: string) => {
+const getDefaultDateTime = (selectedDate?: string): string => {
   const now = new Date();
-  const tzOffset = now.getTimezoneOffset() * 60000;
-  const localNow = new Date(now.getTime() - tzOffset);
-  const localTimeStr = localNow.toISOString().slice(11, 16);
-
-  if (!selectedDate) return localNow.toISOString().slice(0, 16);
-  if (selectedDate.includes('T')) return formatLocalDatetime(selectedDate);
-  return `${selectedDate}T${localTimeStr}`;
+  const offset = now.getTimezoneOffset() * 60000;
+  const localNow = new Date(now.getTime() - offset);
+  const localTimeStr = localNow.toISOString().slice(11, 16); 
+  return selectedDate ? `${selectedDate}T${localTimeStr}` : localNow.toISOString().slice(0, 16);
 };
 
-// --- VALIBOT COMPLIANCE SCHEMA ---
-const MistSchema = v.object({
-  recorded_by: v.pipe(v.string(), v.minLength(1, 'ZLA COMPLIANCE: An active staff member must be selected.')),
-  recorded_at: v.pipe(v.string(), v.minLength(1, 'Date and time required')),
-  am_pm: v.picklist(['AM', 'PM']),
-  mist_level: v.picklist(['LIGHT', 'MEDIUM', 'HEAVY', 'DRENCH']),
-  notes: v.optional(v.string()),
-});
+const normalizeMistLevel = (val?: string): 'LIGHT' | 'MEDIUM' | 'HEAVY' => {
+  if (!val) return 'MEDIUM';
+  const upper = val.toUpperCase().trim();
+  if (upper === 'MODERATE' || upper === 'MEDIUM') return 'MEDIUM';
+  if (upper === 'LIGHT') return 'LIGHT';
+  if (upper === 'HEAVY' || upper === 'DRENCH') return 'HEAVY';
+  return 'MEDIUM';
+};
 
-export function MistModal({
-  isOpen,
-  onClose,
-  animalId,
-  animal: propAnimal,
-  initialData,
-  selectedDate,
-}: MistModalProps) {
+function FormInput({ field, label, type = 'text', placeholder }: { field: any; label: string; type?: string; placeholder?: string }) {
+  const hasError = Boolean(field.state.meta.errors?.length);
+  return (
+    <div className="flex flex-col gap-1 w-full text-left">
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-left">{label}</label>
+      <input
+        type={type}
+        value={field.state.value ?? ''}
+        onBlur={field.handleBlur}
+        onChange={(e) => field.handleChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full p-2.5 bg-slate-50 border rounded-xl outline-none text-xs font-bold text-slate-800 transition-all focus:bg-white focus:ring-4 ${
+          hasError ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 focus:border-slate-400 focus:ring-slate-900/5'
+        }`}
+      />
+      <FieldError meta={field.state.meta} />
+    </div>
+  );
+}
+
+function FormSelect({ field, label, options, placeholder }: { field: any; label: string; options: { value: string | number; label: string }[]; placeholder?: string }) {
+  const hasError = Boolean(field.state.meta.errors?.length);
+  return (
+    <div className="flex flex-col gap-1 w-full text-left">
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 text-left">{label}</label>
+      <select
+        value={field.state.value ?? ''}
+        onBlur={field.handleBlur}
+        onChange={(e) => field.handleChange(e.target.value)}
+        className={`w-full p-2.5 bg-slate-50 border rounded-xl outline-none text-xs font-bold text-slate-800 transition-all focus:bg-white focus:ring-4 cursor-pointer appearance-none ${
+          hasError ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 focus:border-slate-400 focus:ring-slate-900/5'
+        }`}
+      >
+        {placeholder && <option value="" disabled>{placeholder}</option>}
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+      <FieldError meta={field.state.meta} />
+    </div>
+  );
+}
+
+export function MistModal({ isOpen, onClose, animalId, animal: passedAnimal, initialData, selectedDate }: MistModalProps) {
   const queryClient = useQueryClient();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
-  const targetAnimalId = propAnimal?.id || animalId || initialData?.animal_id || '';
+  const { data: queriedAnimal } = useQuery({
+    queryKey: ['animal', animalId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('animals').select('*').eq('id', animalId).single();
+      if (error) throw error;
+      return data as Animal;
+    },
+    enabled: isOpen && Boolean(animalId) && !passedAnimal,
+    initialData: () => {
+      if (passedAnimal) return passedAnimal;
+      const cached = queryClient.getQueryData<Animal[]>(['animals', 'husbandry']) 
+        || queryClient.getQueryData<Animal[]>(['animals', 'dashboard'])
+        || queryClient.getQueryData<Animal[]>(['animals']);
+      return cached?.find(a => a.id === animalId);
+    }
+  });
 
-  const animal = useMemo(() => {
-    if (propAnimal) return propAnimal;
-    const cachedAnimals = queryClient.getQueryData<Animal[]>(['animals', 'husbandry']) || [];
-    return cachedAnimals.find((a) => a.id === targetAnimalId);
-  }, [propAnimal, queryClient, targetAnimalId]);
+  const animal = passedAnimal || queriedAnimal;
+  const isGroupMob = animal?.record_type === 'GROUP';
 
   const { data: activeStaff = [] } = useQuery<ActiveStaffUser[]>({
     queryKey: ['active-staff'],
@@ -124,55 +159,62 @@ export function MistModal({
       if (error) throw error;
       return (data || []) as ActiveStaffUser[];
     },
-    staleTime: 0,
-    gcTime: 1209600000,
-    networkMode: 'offlineFirst',
+    staleTime: 0, 
+    gcTime: 1209600000, 
+    networkMode: 'offlineFirst'
   });
 
   const insertMistMutation = useMutation({
     mutationFn: async (values: MistFormValues) => {
-      const result = v.safeParse(MistSchema, values);
-      if (!result.success) {
-        throw new Error(result.issues[0]?.message || 'Validation failed');
-      }
-
-      if (!targetAnimalId) {
-        throw new Error('Target specimen identifier is missing.');
-      }
-
       return await mistService.insertMistLog({
         id: initialData?.id,
-        animal_id: targetAnimalId,
+        animal_id: animalId,
         recorded_by: values.recorded_by,
         recorded_at: new Date(values.recorded_at).toISOString(),
-        created_by: profile?.id,
-        am_pm: values.am_pm,
+        created_by: profile?.id || user?.id || null,
         mist_level: values.mist_level,
+        am_pm: values.am_pm,
         notes: values.notes?.trim() || null,
       });
     },
     onSuccess: () => {
-      toast.success(initialData?.id ? 'Misting log updated' : 'Misting routine recorded');
+      toast.success(initialData ? 'Misting routine updated' : 'Misting routine logged');
       queryClient.invalidateQueries({ queryKey: ['mist_logs'] });
+      queryClient.invalidateQueries({ queryKey: ['strict_logs'] });
       queryClient.invalidateQueries({ queryKey: ['daily_logs'] });
       onClose();
     },
-    onError: (err: unknown) => {
-      const msg = err instanceof Error ? err.message : 'Failed to record misting log';
-      toast.error(msg);
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : 'Database error';
+      console.error('[MistModal Submission Catch]:', error);
+      toast.error(`Failed to log misting: ${msg}`);
+    },
+  });
+
+  const deleteMistMutation = useMutation({
+    mutationFn: async () => {
+      if (!initialData?.id) throw new Error('No record ID to delete');
+      return await mistService.deleteMistLog(initialData.id);
+    },
+    onSuccess: () => {
+      toast.success('Misting routine deleted');
+      queryClient.invalidateQueries({ queryKey: ['mist_logs'] });
+      queryClient.invalidateQueries({ queryKey: ['strict_logs'] });
+      queryClient.invalidateQueries({ queryKey: ['daily_logs'] });
+      onClose();
+    },
+    onError: (error: unknown) => {
+      const msg = error instanceof Error ? error.message : 'Database error';
+      toast.error(`Failed to delete record: ${msg}`);
     },
   });
 
   const form = useForm<MistFormValues>({
     defaultValues: {
-      recorded_by: initialData?.recorded_by || profile?.id || '',
-      recorded_at: initialData?.recorded_at
-        ? formatLocalDatetime(initialData.recorded_at)
-        : initialData?.log_date
-          ? getDefaultDateTime(initialData.log_date)
-          : getDefaultDateTime(selectedDate),
+      recorded_by: initialData?.recorded_by || profile?.id || user?.id || '',
+      recorded_at: initialData?.recorded_at ? formatLocalDatetime(initialData.recorded_at) : getDefaultDateTime(selectedDate),
+      mist_level: normalizeMistLevel(initialData?.mist_level),
       am_pm: (initialData?.am_pm?.toUpperCase() as 'AM' | 'PM') || (new Date().getHours() < 12 ? 'AM' : 'PM'),
-      mist_level: (initialData?.mist_level?.toUpperCase() as MistLevel) || 'MEDIUM',
       notes: initialData?.notes || '',
     },
     validators: {
@@ -182,110 +224,126 @@ export function MistModal({
           return result.issues[0]?.message || 'Please complete all required fields';
         }
         return undefined;
-      },
+      }
     },
     onSubmit: async ({ value }) => {
-      await insertMistMutation.mutateAsync(value);
+      insertMistMutation.mutate(value);
     },
   });
 
   useEffect(() => {
     if (isOpen) {
       form.reset();
+      setShowDeleteConfirm(false);
       if (initialData) {
-        form.setFieldValue('recorded_by', initialData.recorded_by || profile?.id || '');
-        form.setFieldValue(
-          'recorded_at',
-          initialData.recorded_at
-            ? formatLocalDatetime(initialData.recorded_at)
-            : initialData.log_date
-              ? getDefaultDateTime(initialData.log_date)
-              : getDefaultDateTime(selectedDate)
-        );
-        form.setFieldValue(
-          'am_pm',
-          (initialData.am_pm?.toUpperCase() as 'AM' | 'PM') || (new Date().getHours() < 12 ? 'AM' : 'PM')
-        );
-        form.setFieldValue('mist_level', (initialData.mist_level?.toUpperCase() as MistLevel) || 'MEDIUM');
+        form.setFieldValue('recorded_by', initialData.recorded_by || profile?.id || user?.id || '');
+        form.setFieldValue('recorded_at', formatLocalDatetime(initialData.recorded_at || initialData.log_date));
+        form.setFieldValue('mist_level', normalizeMistLevel(initialData.mist_level));
+        form.setFieldValue('am_pm', (initialData.am_pm?.toUpperCase() as 'AM' | 'PM') || (new Date().getHours() < 12 ? 'AM' : 'PM'));
         form.setFieldValue('notes', initialData.notes || '');
       } else {
-        form.setFieldValue('recorded_by', profile?.id || '');
+        form.setFieldValue('recorded_by', profile?.id || user?.id || '');
         form.setFieldValue('recorded_at', getDefaultDateTime(selectedDate));
-        form.setFieldValue('am_pm', new Date().getHours() < 12 ? 'AM' : 'PM');
         form.setFieldValue('mist_level', 'MEDIUM');
+        form.setFieldValue('am_pm', new Date().getHours() < 12 ? 'AM' : 'PM');
         form.setFieldValue('notes', '');
       }
     }
-  }, [isOpen, initialData, selectedDate, profile?.id, form]);
+  }, [isOpen, initialData, selectedDate, profile?.id, user?.id, form]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200 font-sans">
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-sm sm:max-w-md max-h-[92vh] flex flex-col overflow-hidden border border-slate-200/80">
-        {/* Header Bar */}
-        <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-slate-100 bg-white flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-cyan-50 text-cyan-600 border border-cyan-100 flex items-center justify-center font-black shadow-xs shrink-0">
-              <Droplets size={16} className="sm:w-5 sm:h-5" />
+    <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center p-0 md:p-4 bg-slate-950/70 backdrop-blur-md font-sans text-left">
+      <div className="bg-white w-full h-[100dvh] md:h-auto md:max-h-[90vh] md:max-w-xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col border-0 md:border md:border-slate-200 relative text-left">
+        
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 text-left">
+          <div className="flex items-center gap-3 text-left">
+            <div className={`p-2 rounded-xl ${isGroupMob ? 'bg-blue-50 text-blue-600' : 'bg-cyan-50 text-cyan-600'}`}>
+              {isGroupMob ? <Users size={18} /> : <Droplets size={18} />}
             </div>
-            <div>
-              <h2 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight leading-none">
-                {initialData?.id ? 'Edit Misting Log' : 'Log Enclosure Misting'}
-              </h2>
-              <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                Specimen • <span className="text-cyan-700 font-bold">{animal?.name || 'Collection Specimen'}</span>
+            <div className="text-left">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-tight leading-tight text-left">
+                  {initialData ? 'Edit Misting Routine' : 'Log Misting Routine'}
+                </h2>
+                {isGroupMob && (
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest">
+                    Whole Enclosure
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-tight mt-0.5 text-left">
+                Specimen &bull; <span className="text-cyan-700 font-bold">{animal?.name || 'Unknown Specimen'}</span>
               </p>
             </div>
           </div>
-          <button
+          <button 
             type="button"
-            onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            onClick={onClose} 
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            form.handleSubmit();
-          }}
-          className="p-4 sm:p-5 space-y-3.5 sm:space-y-4 overflow-y-auto custom-scrollbar flex-1"
+        {/* Scrollable Form Body */}
+        <form 
+          onSubmit={(e: FormEvent) => { 
+            e.preventDefault(); 
+            e.stopPropagation(); 
+            form.handleSubmit(); 
+          }} 
+          className="p-5 overflow-y-auto custom-scrollbar bg-white flex-1 relative space-y-4 text-left"
         >
-          {/* Shift Time Window (AM/PM) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-left">
+            <form.Field name="recorded_at">
+              {(field) => <FormInput field={field} label="Date & Time" type="datetime-local" />}
+            </form.Field>
+            
+            <form.Field name="recorded_by">
+              {(field) => (
+                <FormSelect 
+                  field={field} 
+                  label="Conducted By *" 
+                  placeholder="-- Select Keeper --"
+                  options={activeStaff.map((s) => ({ value: s.id, label: `${s.name} (${s.initials || '?'})` }))} 
+                />
+              )}
+            </form.Field>
+          </div>
+
+          {/* Shift Selector */}
           <form.Field name="am_pm">
-            {(field: FieldApi<MistFormValues, 'am_pm', any, any>) => (
-              <div className="space-y-1">
-                <span className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  Shift Routine Window
-                </span>
+            {(field) => (
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 text-left">
+                  Shift / Routine Window
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => field.handleChange('AM')}
-                    className={`py-2 px-2.5 rounded-xl border-2 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    className={`py-2 px-3 rounded-xl border-2 font-black text-xs uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                       field.state.value === 'AM'
                         ? 'bg-cyan-50 border-cyan-500 text-cyan-800 shadow-xs'
                         : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
                     }`}
                   >
-                    <Sun size={12} className={field.state.value === 'AM' ? 'text-cyan-600' : 'text-slate-400'} />
+                    <Sun size={14} className={field.state.value === 'AM' ? 'text-cyan-600' : 'text-slate-400'} />
                     AM Spray
                   </button>
                   <button
                     type="button"
                     onClick={() => field.handleChange('PM')}
-                    className={`py-2 px-2.5 rounded-xl border-2 font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    className={`py-2 px-3 rounded-xl border-2 font-black text-xs uppercase tracking-widest transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                       field.state.value === 'PM'
                         ? 'bg-indigo-50 border-indigo-500 text-indigo-800 shadow-xs'
                         : 'border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600'
                     }`}
                   >
-                    <Moon size={12} className={field.state.value === 'PM' ? 'text-indigo-600' : 'text-slate-400'} />
+                    <Moon size={14} className={field.state.value === 'PM' ? 'text-indigo-600' : 'text-slate-400'} />
                     PM Spray
                   </button>
                 </div>
@@ -293,139 +351,108 @@ export function MistModal({
             )}
           </form.Field>
 
-          {/* Keeper and Timestamp Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-            <form.Field name="recorded_by">
-              {(field: FieldApi<MistFormValues, 'recorded_by', any, any>) => (
-                <div className="space-y-1">
-                  <label
-                    htmlFor="mist-recorded-by"
-                    className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500"
-                  >
-                    Conducted By *
-                  </label>
-                  <select
-                    id="mist-recorded-by"
-                    value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 sm:px-3 sm:py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 cursor-pointer"
-                  >
-                    <option value="" disabled>-- Select Keeper --</option>
-                    {activeStaff.map((staff) => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.name} {staff.initials ? `(${staff.initials})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <FieldError meta={field.state.meta} />
-                </div>
-              )}
-            </form.Field>
-
-            <form.Field name="recorded_at">
-              {(field: FieldApi<MistFormValues, 'recorded_at', any, any>) => (
-                <div className="space-y-1">
-                  <label
-                    htmlFor="mist-recorded-at"
-                    className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500"
-                  >
-                    Date &amp; Time
-                  </label>
-                  <input
-                    id="mist-recorded-at"
-                    type="datetime-local"
-                    value={field.state.value}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-                  />
-                  <FieldError meta={field.state.meta} />
-                </div>
-              )}
-            </form.Field>
-          </div>
-
-          <hr className="border-slate-100" />
-
-          {/* Misting Saturation Intensity Selector */}
+          {/* Misting Saturation Level Selector */}
           <form.Field name="mist_level">
-            {(field: FieldApi<MistFormValues, 'mist_level', any, any>) => {
-              const levels: { value: MistLevel; label: string; desc: string }[] = [
-                { value: 'LIGHT', label: 'Light', desc: 'Substrate spray' },
-                { value: 'MEDIUM', label: 'Medium', desc: 'Hydration routine' },
-                { value: 'HEAVY', label: 'Heavy', desc: 'Moss wet & soak' },
-                { value: 'DRENCH', label: 'Drench', desc: 'Full soak down' },
+            {(field) => {
+              const options: { value: 'LIGHT' | 'MEDIUM' | 'HEAVY'; label: string; desc: string }[] = [
+                { value: 'LIGHT', label: 'Light Mist', desc: 'Fine spray / humidity boost' },
+                { value: 'MEDIUM', label: 'Medium Mist', desc: 'Standard hydration pass' },
+                { value: 'HEAVY', label: 'Heavy Spray', desc: 'Full enclosure & substrate soak' },
               ];
-
               return (
-                <div className="space-y-1.5 bg-cyan-50/40 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-cyan-100">
-                  <span className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-cyan-950">
-                    Misting Saturation Intensity *
-                  </span>
-                  <div className="grid grid-cols-2 gap-2">
-                    {levels.map((lvl) => {
-                      const isSelected = field.state.value === lvl.value;
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 text-left">
+                    Misting Intensity *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {options.map((opt) => {
+                      const isSelected = field.state.value === opt.value;
                       return (
                         <button
-                          key={lvl.value}
+                          key={opt.value}
                           type="button"
-                          onClick={() => field.handleChange(lvl.value)}
-                          className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          onClick={() => field.handleChange(opt.value)}
+                          className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
                             isSelected
-                              ? 'bg-white border-cyan-500 shadow-xs ring-2 ring-cyan-500/20'
-                              : 'bg-white/80 border-slate-200 hover:border-slate-300 hover:bg-white'
+                              ? 'border-cyan-500 bg-cyan-50/80 shadow-xs text-cyan-900 ring-2 ring-cyan-500/20'
+                              : 'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600'
                           }`}
                         >
-                          <div className="flex items-center justify-between w-full">
-                            <span
-                              className={`text-xs font-black uppercase tracking-wider ${
-                                isSelected ? 'text-cyan-900' : 'text-slate-700'
-                              }`}
-                            >
-                              {lvl.label}
-                            </span>
-                            <Droplets size={12} className={isSelected ? 'text-cyan-600' : 'text-slate-300'} />
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-xs font-black uppercase tracking-wider">{opt.label}</span>
+                            <Droplets size={14} className={isSelected ? 'text-cyan-600' : 'text-slate-300'} />
                           </div>
-                          <span className="text-[9px] font-medium text-slate-400 mt-1 leading-tight">
-                            {lvl.desc}
-                          </span>
+                          <p className="text-[9px] font-medium text-slate-500 leading-tight">{opt.desc}</p>
                         </button>
                       );
                     })}
                   </div>
-                  <FieldError meta={field.state.meta} />
                 </div>
               );
             }}
           </form.Field>
 
-          {/* Husbandry Notes */}
+          {/* Observations & Notes */}
           <form.Field name="notes">
-            {(field: FieldApi<MistFormValues, 'notes', any, any>) => (
-              <div className="space-y-1">
-                <label
-                  htmlFor="mist-notes"
-                  className="block text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-slate-500"
-                >
-                  Notes / Observations
+            {(field) => (
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 text-left">
+                  Observations / Enclosure Notes
                 </label>
                 <textarea
-                  id="mist-notes"
                   rows={2}
-                  value={field.state.value || ''}
+                  value={field.state.value ?? ''}
                   onChange={(e) => field.handleChange(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium text-slate-900 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 resize-none"
-                  placeholder="Enclosure moss saturated, water dish refilled..."
+                  placeholder="Substrate dampness, shedding condition, humidity gauge..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 resize-none shadow-xs"
                 />
               </div>
             )}
           </form.Field>
+        </form>
 
-          {/* Action Buttons */}
-          <div className="pt-2 flex items-center justify-end gap-2 sm:gap-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-2 bg-slate-100 text-slate-700 font-bold text-[10px] sm:text-xs uppercase tracking-widest rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
+        {/* Footer Bar */}
+        <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0 text-left">
+          <div className="text-left">
+            {initialData?.id && (
+              showDeleteConfirm ? (
+                <div className="flex items-center gap-2 animate-in fade-in duration-200">
+                  <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Confirm delete?</span>
+                  <button
+                    type="button"
+                    onClick={() => deleteMistMutation.mutate()}
+                    disabled={deleteMistMutation.isPending}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-black uppercase tracking-widest transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    {deleteMistMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Yes, Delete'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={deleteMistMutation.isPending || insertMistMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold uppercase tracking-widest text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 size={15} />
+                  Delete
+                </button>
+              )
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -433,17 +460,19 @@ export function MistModal({
               selector={(state) => [state.isSubmitting]}
               children={([isSubmitting]) => (
                 <button
-                  type="submit"
-                  disabled={insertMistMutation.isPending || isSubmitting}
-                  className="flex items-center gap-1.5 px-4 sm:px-5 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-black text-[10px] sm:text-xs uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                  type="button"
+                  onClick={form.handleSubmit}
+                  disabled={insertMistMutation.isPending || isSubmitting || deleteMistMutation.isPending}
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-md disabled:opacity-50 bg-cyan-600 hover:bg-cyan-500 cursor-pointer active:scale-95"
                 >
-                  {insertMistMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                  {initialData?.id ? 'Update Mist Log' : 'Save Mist Log'}
+                  {(isSubmitting || insertMistMutation.isPending) ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {initialData ? 'Update Routine' : 'Save Routine'}
                 </button>
               )}
             />
           </div>
-        </form>
+        </div>
+
       </div>
     </div>
   );

@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import type { Animal, FeedLog, WeightLog, TemperatureLog, MistLog, User } from '../../types';
-
 export interface HusbandryLogsProps {
   animalId: string;
   weightUnit?: string;
