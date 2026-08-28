@@ -186,7 +186,7 @@ export function MistModal({ isOpen, onClose, animalId, animal: passedAnimal, ini
     },
     onError: (error: unknown) => {
       const msg = error instanceof Error ? error.message : 'Database error';
-      console.error('[MistModal Submission Catch]:', error);
+      console.error('[MistModal Submission Error]:', error);
       toast.error(`Failed to log misting: ${msg}`);
     },
   });
@@ -288,7 +288,7 @@ export function MistModal({ isOpen, onClose, animalId, animal: passedAnimal, ini
           </button>
         </div>
 
-        {/* Scrollable Form Body */}
+        {/* Form Body */}
         <form 
           onSubmit={(e: FormEvent) => { 
             e.preventDefault(); 
@@ -351,7 +351,7 @@ export function MistModal({ isOpen, onClose, animalId, animal: passedAnimal, ini
             )}
           </form.Field>
 
-          {/* Misting Saturation Level Selector */}
+          {/* Misting Intensity */}
           <form.Field name="mist_level">
             {(field) => {
               const options: { value: 'LIGHT' | 'MEDIUM' | 'HEAVY'; label: string; desc: string }[] = [
@@ -392,7 +392,7 @@ export function MistModal({ isOpen, onClose, animalId, animal: passedAnimal, ini
             }}
           </form.Field>
 
-          {/* Observations & Notes */}
+          {/* Notes */}
           <form.Field name="notes">
             {(field) => (
               <div className="space-y-1 text-left">
@@ -411,7 +411,7 @@ export function MistModal({ isOpen, onClose, animalId, animal: passedAnimal, ini
           </form.Field>
         </form>
 
-        {/* Footer Bar */}
+        {/* Footer */}
         <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between bg-white shrink-0 text-left">
           <div className="text-left">
             {initialData?.id && (

@@ -1043,9 +1043,7 @@ export function HusbandryLogs() {
         <FeedModal 
           isOpen={feedModalState.isOpen} 
           animalId={feedModalState.animalId} 
-          animal={feedModalState.animal}
-          initialData={feedModalState.initialData} 
-          selectedDate={activeDate} 
+          defaultFoodType={feedModalState.animal?.name}
           onClose={() => setFeedModalState({ isOpen: false, animalId: null, animal: null, initialData: undefined })} 
         />
       )}

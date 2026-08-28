@@ -35,13 +35,13 @@ import type {
   EventStaffAllocation, 
   EventAnimalAllocation,
   Animal, 
-  User, 
+  UserProfile, 
   Voucher 
 } from '../../types';
 
 interface FullEventEntry extends EventsCalendar {
   commercials?: EventCommercial | null;
-  staff_allocations?: (EventStaffAllocation & { users?: Partial<User> | null })[];
+  staff_allocations?: (EventStaffAllocation & { users?: Partial<UserProfile> | null })[];
   animal_allocations?: (EventAnimalAllocation & { animals?: Partial<Animal> | null })[];
 }
 
@@ -149,7 +149,7 @@ const animalsListOptions = queryOptions({
     const { data, error } = await supabase
       .from('animals')
       .select('id, name, species, ring_number, location, profile_image_url')
-      .eq('is_deleted', false)
+      .eq('status', 'ACTIVE')
       .order('name');
     if (error) throw error;
     return (data || []) as Animal[];
@@ -166,7 +166,7 @@ const staffListOptions = queryOptions({
       .eq('is_active', true)
       .order('name');
     if (error) throw error;
-    return (data || []) as User[];
+    return (data || []) as UserProfile[];
   },
   staleTime: 1000 * 60 * 15,
 });
@@ -897,7 +897,7 @@ export function EventsManagerPage() {
                           </div>
                         </div>
 
-                        {/* Commercials Box with Edit and Archive controls */}
+                        {/* Commercials Box */}
                         <div className="w-full lg:w-80 bg-slate-50/90 border border-slate-200 rounded-2xl p-3.5 space-y-2 shrink-0 text-left shadow-2xs">
                           <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-200/80 text-left">
                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5 text-left">
@@ -977,7 +977,7 @@ export function EventsManagerPage() {
         </div>
       </div>
 
-      {/* CUSTOM CONFIRMATION DIALOG */}
+      {/* Confirmation Dialog */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 text-left space-y-4">
@@ -1018,7 +1018,7 @@ export function EventsManagerPage() {
         </div>
       )}
 
-      {/* DYNAMIC EVENT REGISTRATION / EDIT MODAL */}
+      {/* Creation / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200 font-sans text-left">
           <div className="bg-white border border-slate-200/80 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[94vh] text-left">
@@ -1260,7 +1260,7 @@ export function EventsManagerPage() {
                 </div>
               </div>
 
-              {/* Day-of Onsite Contact */}
+              {/* Day-of Contact */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
                 <div className="text-left">
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 text-left">
@@ -1290,7 +1290,7 @@ export function EventsManagerPage() {
                 </div>
               </div>
 
-              {/* Multi-Staff Allocation */}
+              {/* Staff Allocation */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-left">
                 <div className="flex justify-between items-center text-left">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1.5 text-left">
@@ -1341,7 +1341,7 @@ export function EventsManagerPage() {
                 </div>
               </div>
 
-              {/* Multi-Animal Allocation */}
+              {/* Animal Allocation */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3 text-left">
                 <div className="flex justify-between items-center text-left">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-700 flex items-center gap-1.5 text-left">

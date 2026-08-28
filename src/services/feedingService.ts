@@ -1,48 +1,59 @@
 import { supabase } from '../lib/supabase';
-import type { FeedLog, FeedingSchedule } from '../types';
 
 export const feedingService = {
-  async insertFeedLog(payloads: FeedLog | FeedLog[]): Promise<FeedLog[]> {
-    const rawArray = Array.isArray(payloads) ? payloads : [payloads];
-    const cleanPayloads = rawArray.map((p) => ({
-      ...p,
-      id:
-        p.id ||
-        (typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : Math.random().toString(36).substring(2)),
-      is_deleted: false,
-    }));
-
-    const { data, error } = await supabase
-      .from('feed_logs')
-      .insert(cleanPayloads)
-      .select();
-
-    if (error) throw error;
-    return (data || []) as FeedLog[];
+  insertFeedLog: async (payload: any | any[]) => {
+    try {
+      const { data, error } = await supabase
+        .from('feed_logs')
+        .upsert(payload) 
+        .select();
+        
+      if (error) throw error;
+      return data;
+    } catch (error: any) {
+      console.warn("Network unreachable or upsert failed. Queueing offline...", error);
+      throw error; 
+    }
   },
 
-  async bulkCreateSchedules(
-    schedules: Partial<FeedingSchedule>[],
-    userId?: string
-  ): Promise<FeedingSchedule[]> {
-    const payload = schedules.map((s) => ({
-      ...s,
-      id: s.id || crypto.randomUUID(),
-      created_by: userId || s.created_by,
-      is_deleted: false,
-      status: s.status || 'PENDING',
-    }));
+  bulkCreateSchedules: async (schedules: any[], userId: string) => {
+    try {
+      const payload = schedules.map(schedule => ({
+        ...schedule,
+        created_by: userId,
+        modified_by: userId // Satisfies PostgreSQL NOT NULL constraint
+      }));
 
-    const { data, error } = await supabase
-      .from('feeding_schedules')
-      .insert(payload)
-      .select();
-
-    if (error) throw error;
-    return (data || []) as FeedingSchedule[];
+      const { data, error } = await supabase
+        .from('feeding_schedules')
+        .insert(payload)
+        .select();
+        
+      if (error) throw error;
+      return data;
+    } catch (error: any) {
+      console.error("Failed to create feeding schedules:", error);
+      throw error;
+    }
   },
+
+  deleteSchedule: async (scheduleId: string, userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('feeding_schedules')
+        .update({ 
+          is_deleted: true, 
+          modified_by: userId 
+        })
+        .eq('id', scheduleId);
+        
+      if (error) throw error;
+      return true;
+    } catch (error: any) {
+      console.error(`Failed to delete schedule ${scheduleId}:`, error);
+      throw error;
+    }
+  }
 };
 
 export default feedingService;

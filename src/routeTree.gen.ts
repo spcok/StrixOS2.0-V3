@@ -23,6 +23,10 @@ import { Route as LogisticsEventsRouteImport } from './routes/logistics/events'
 import { Route as LogisticsExternalTransfersRouteImport } from './routes/logistics/external-transfers'
 import { Route as LogisticsInternalMovementsRouteImport } from './routes/logistics/internal-movements'
 import { Route as LogisticsVouchersRouteImport } from './routes/logistics/vouchers'
+import { Route as SafetyDrillsRouteImport } from './routes/safety/drills'
+import { Route as SafetyFirstAidRouteImport } from './routes/safety/first-aid'
+import { Route as SafetyIncidentsRouteImport } from './routes/safety/incidents'
+import { Route as SafetyMaintenanceRouteImport } from './routes/safety/maintenance'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -96,6 +100,26 @@ const LogisticsVouchersRoute = LogisticsVouchersRouteImport.update({
   path: '/logistics/vouchers',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SafetyDrillsRoute = SafetyDrillsRouteImport.update({
+  id: '/safety/drills',
+  path: '/safety/drills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SafetyFirstAidRoute = SafetyFirstAidRouteImport.update({
+  id: '/safety/first-aid',
+  path: '/safety/first-aid',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SafetyIncidentsRoute = SafetyIncidentsRouteImport.update({
+  id: '/safety/incidents',
+  path: '/safety/incidents',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SafetyMaintenanceRoute = SafetyMaintenanceRouteImport.update({
+  id: '/safety/maintenance',
+  path: '/safety/maintenance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -112,6 +136,10 @@ export interface FileRoutesByFullPath {
   '/logistics/external-transfers': typeof LogisticsExternalTransfersRoute
   '/logistics/internal-movements': typeof LogisticsInternalMovementsRoute
   '/logistics/vouchers': typeof LogisticsVouchersRoute
+  '/safety/drills': typeof SafetyDrillsRoute
+  '/safety/first-aid': typeof SafetyFirstAidRoute
+  '/safety/incidents': typeof SafetyIncidentsRoute
+  '/safety/maintenance': typeof SafetyMaintenanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -128,6 +156,10 @@ export interface FileRoutesByTo {
   '/logistics/external-transfers': typeof LogisticsExternalTransfersRoute
   '/logistics/internal-movements': typeof LogisticsInternalMovementsRoute
   '/logistics/vouchers': typeof LogisticsVouchersRoute
+  '/safety/drills': typeof SafetyDrillsRoute
+  '/safety/first-aid': typeof SafetyFirstAidRoute
+  '/safety/incidents': typeof SafetyIncidentsRoute
+  '/safety/maintenance': typeof SafetyMaintenanceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -145,6 +177,10 @@ export interface FileRoutesById {
   '/logistics/external-transfers': typeof LogisticsExternalTransfersRoute
   '/logistics/internal-movements': typeof LogisticsInternalMovementsRoute
   '/logistics/vouchers': typeof LogisticsVouchersRoute
+  '/safety/drills': typeof SafetyDrillsRoute
+  '/safety/first-aid': typeof SafetyFirstAidRoute
+  '/safety/incidents': typeof SafetyIncidentsRoute
+  '/safety/maintenance': typeof SafetyMaintenanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -163,6 +199,10 @@ export interface FileRouteTypes {
     | '/logistics/external-transfers'
     | '/logistics/internal-movements'
     | '/logistics/vouchers'
+    | '/safety/drills'
+    | '/safety/first-aid'
+    | '/safety/incidents'
+    | '/safety/maintenance'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -179,6 +219,10 @@ export interface FileRouteTypes {
     | '/logistics/external-transfers'
     | '/logistics/internal-movements'
     | '/logistics/vouchers'
+    | '/safety/drills'
+    | '/safety/first-aid'
+    | '/safety/incidents'
+    | '/safety/maintenance'
   id:
     | '__root__'
     | '/'
@@ -195,6 +239,10 @@ export interface FileRouteTypes {
     | '/logistics/external-transfers'
     | '/logistics/internal-movements'
     | '/logistics/vouchers'
+    | '/safety/drills'
+    | '/safety/first-aid'
+    | '/safety/incidents'
+    | '/safety/maintenance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -212,6 +260,10 @@ export interface RootRouteChildren {
   LogisticsExternalTransfersRoute: typeof LogisticsExternalTransfersRoute
   LogisticsInternalMovementsRoute: typeof LogisticsInternalMovementsRoute
   LogisticsVouchersRoute: typeof LogisticsVouchersRoute
+  SafetyDrillsRoute: typeof SafetyDrillsRoute
+  SafetyFirstAidRoute: typeof SafetyFirstAidRoute
+  SafetyIncidentsRoute: typeof SafetyIncidentsRoute
+  SafetyMaintenanceRoute: typeof SafetyMaintenanceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -314,6 +366,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LogisticsVouchersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/safety/drills': {
+      id: '/safety/drills'
+      path: '/safety/drills'
+      fullPath: '/safety/drills'
+      preLoaderRoute: typeof SafetyDrillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/safety/first-aid': {
+      id: '/safety/first-aid'
+      path: '/safety/first-aid'
+      fullPath: '/safety/first-aid'
+      preLoaderRoute: typeof SafetyFirstAidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/safety/incidents': {
+      id: '/safety/incidents'
+      path: '/safety/incidents'
+      fullPath: '/safety/incidents'
+      preLoaderRoute: typeof SafetyIncidentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/safety/maintenance': {
+      id: '/safety/maintenance'
+      path: '/safety/maintenance'
+      fullPath: '/safety/maintenance'
+      preLoaderRoute: typeof SafetyMaintenanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -332,6 +412,10 @@ const rootRouteChildren: RootRouteChildren = {
   LogisticsExternalTransfersRoute: LogisticsExternalTransfersRoute,
   LogisticsInternalMovementsRoute: LogisticsInternalMovementsRoute,
   LogisticsVouchersRoute: LogisticsVouchersRoute,
+  SafetyDrillsRoute: SafetyDrillsRoute,
+  SafetyFirstAidRoute: SafetyFirstAidRoute,
+  SafetyIncidentsRoute: SafetyIncidentsRoute,
+  SafetyMaintenanceRoute: SafetyMaintenanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
